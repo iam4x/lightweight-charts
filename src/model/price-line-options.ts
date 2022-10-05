@@ -46,4 +46,6 @@ export interface PriceLineOptions {
 	 * @defaultValue `''`
 	 */
 	title: string;
+
+	draggable?: boolean;
 }
