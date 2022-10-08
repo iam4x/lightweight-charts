@@ -561,7 +561,7 @@ export class PaneWidget implements IDestroyable, MouseEventHandlers {
 		source: IDataSource
 	): void {
 		const state = ensureNotNull(this._state);
-		const paneViews = paneViewsGetter(source, state);
+		const paneViews = paneViewsGetter(source, state).slice().reverse();
 		const height = state.height();
 		const width = state.width();
 		const hoveredSource = state.model().hoveredSource();
