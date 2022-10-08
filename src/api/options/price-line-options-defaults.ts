@@ -10,4 +10,7 @@ export const priceLineOptionsDefaults: PriceLineOptions = {
 	axisLabelVisible: true,
 	title: '',
 	draggable: false,
+	textA: '',
+	textB: '',
+	textC: '',
 };

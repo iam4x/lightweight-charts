@@ -48,4 +48,8 @@ export interface PriceLineOptions {
 	title: string;
 
 	draggable?: boolean;
+
+	textA?: string;
+	textB?: string;
+	textC?: string;
 }
