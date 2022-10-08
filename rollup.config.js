@@ -18,13 +18,13 @@ const currentVersion = getCurrentVersion();
 function getConfig(inputFile, type, isProd) {
 	const isModular = type === 'module';
 	const suffix = isModular ? 'esm' : 'standalone';
-	const mode = isProd ? 'production' : 'development';
+	// const mode = isProd ? 'production' : 'development';
 
 	const config = {
 		input: inputFile,
 		output: {
 			format: isModular ? 'esm' : 'iife',
-			file: `./dist/lightweight-charts.${suffix}.${mode}.js`,
+			file: `./dist/lightweight-charts.${suffix}.production.js`,
 			banner: `
 /*!
  * @license
