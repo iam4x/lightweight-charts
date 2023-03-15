@@ -3,7 +3,7 @@ import { LineStyle, LineWidth } from '../renderers/draw-line';
 /**
  * Represents a price line options.
  */
-export interface PriceLineOptions {
+export interface PriceLineOptions extends Record<string, string | number | boolean | undefined> {
 	/**
 	 * Price line's value.
 	 *
