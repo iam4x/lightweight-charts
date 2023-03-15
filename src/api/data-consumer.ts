@@ -2,21 +2,7 @@ import { isNumber, isString } from '../helpers/strict-type-checks';
 
 import { Series } from '../model/series';
 import { SeriesType } from '../model/series-options';
-import { BusinessDay, UTCTimestamp } from '../model/time-data';
-
-/**
- * The Time type is used to represent the time of data items.
- *
- * Values can be a {@link UTCTimestamp}, a {@link BusinessDay}, or a business day string in ISO format.
- *
- * @example
- * ```js
- * const timestamp = 1529899200; // Literal timestamp representing 2018-06-25T04:00:00.000Z
- * const businessDay = { year: 2019, month: 6, day: 1 }; // June 1, 2019
- * const businessDayString = '2021-02-03'; // Business day string literal
- * ```
- */
-export type Time = UTCTimestamp | BusinessDay | string;
+import { BusinessDay, Time, UTCTimestamp } from '../model/time-data';
 
 /**
  * Check if a time value is a business day object.
@@ -97,6 +83,61 @@ export interface HistogramData extends SingleValueData {
 }
 
 /**
+ * Structure describing a single item of data for area series
+ */
+export interface AreaData extends SingleValueData {
+	/**
+	 * Optional line color value for certain data item. If missed, color from options is used
+	 */
+	lineColor?: string;
+
+	/**
+	 * Optional top color value for certain data item. If missed, color from options is used
+	 */
+	topColor?: string;
+
+	/**
+	 * Optional bottom color value for certain data item. If missed, color from options is used
+	 */
+	bottomColor?: string;
+}
+
+/**
+ * Structure describing a single item of data for baseline series
+ */
+export interface BaselineData extends SingleValueData {
+	/**
+	 * Optional top area top fill color value for certain data item. If missed, color from options is used
+	 */
+	topFillColor1?: string;
+
+	/**
+	 * Optional top area bottom fill color value for certain data item. If missed, color from options is used
+	 */
+	topFillColor2?: string;
+
+	/**
+	 * Optional top area line color value for certain data item. If missed, color from options is used
+	 */
+	topLineColor?: string;
+
+	/**
+	 * Optional bottom area top fill color value for certain data item. If missed, color from options is used
+	 */
+	bottomFillColor1?: string;
+
+	/**
+	 * Optional bottom area bottom fill color value for certain data item. If missed, color from options is used
+	 */
+	bottomFillColor2?: string;
+
+	/**
+	 * Optional bottom area line color value for certain data item. If missed, color from options is used
+	 */
+	bottomLineColor?: string;
+}
+
+/**
  * Represents a bar with a {@link Time} and open, high, low, and close prices.
  */
 export interface OhlcData {
@@ -155,8 +196,13 @@ export function isWhitespaceData(data: SeriesDataItemTypeMap[SeriesType]): data 
 	return (data as Partial<BarData>).open === undefined && (data as Partial<LineData>).value === undefined;
 }
 
-export function isFulfilledData(data: SeriesDataItemTypeMap[SeriesType]): data is (BarData | LineData | HistogramData) {
-	return (data as Partial<BarData>).open !== undefined || (data as Partial<LineData>).value !== undefined;
+export function isFulfilledData<T extends SeriesDataItemTypeMap[SeriesType]>(
+	data: T
+): data is Extract<T, BarData | LineData | HistogramData> {
+	return (
+		(data as Partial<BarData>).open !== undefined ||
+		(data as Partial<LineData>).value !== undefined
+	);
 }
 
 /**
@@ -176,11 +222,11 @@ export interface SeriesDataItemTypeMap {
 	/**
 	 * The types of area series data.
 	 */
-	Area: SingleValueData | WhitespaceData;
+	Area: AreaData | WhitespaceData;
 	/**
 	 * The types of baseline series data.
 	 */
-	Baseline: SingleValueData | WhitespaceData;
+	Baseline: BaselineData | WhitespaceData;
 	/**
 	 * The types of line series data.
 	 */

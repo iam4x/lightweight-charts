@@ -2,9 +2,12 @@
 	"extends": "@tsconfig/docusaurus/tsconfig.json",
 	"compilerOptions": {
 		"strict": true,
-		"resolveJsonModule": true
+		"resolveJsonModule": true,
+		"jsx": "react",
+		"moduleResolution": "node",
 	},
 	"include": [
-		"./src/**/*.tsx"
+		"./**/*.ts",
+		"./**/*.tsx",
 	]
 }

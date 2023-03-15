@@ -15,9 +15,9 @@ import { Crosshair, CrosshairOptions } from './crosshair';
 import { CustomPriceLine } from './custom-price-line';
 import { DefaultPriceScaleId, isDefaultPriceScale } from './default-price-scale';
 import { GridOptions } from './grid';
-import { InvalidateMask, InvalidationLevel } from './invalidate-mask';
+import { InvalidateMask, InvalidationLevel, ITimeScaleAnimation } from './invalidate-mask';
 import { IPriceDataSource } from './iprice-data-source';
-import { ColorType, LayoutOptions, LayoutOptionsInternal } from './layout-options';
+import { ColorType, LayoutOptions } from './layout-options';
 import { LocalizationOptions } from './localization-options';
 import { Magnet } from './magnet';
 import { DEFAULT_STRETCH_FACTOR, Pane } from './pane';
@@ -27,6 +27,7 @@ import { Series, SeriesOptionsInternal } from './series';
 import { SeriesOptionsMap, SeriesType } from './series-options';
 import { LogicalRange, TimePointIndex, TimeScalePoint } from './time-data';
 import { TimeScale, TimeScaleOptions } from './time-scale';
+import { TouchMouseEventData } from './touch-mouse-event-data';
 import { Watermark, WatermarkOptions } from './watermark';
 
 /**
@@ -91,10 +92,8 @@ export interface HandleScaleOptions {
 
 	/**
 	 * Enable resetting scaling by double-clicking the left mouse button.
-	 *
-	 * @defaultValue `true`
 	 */
-	axisDoubleClickReset: boolean;
+	axisDoubleClickReset: AxisDoubleClickOptions | boolean;
 }
 
 /**
@@ -117,10 +116,13 @@ export interface KineticScrollOptions {
 }
 
 type HandleScaleOptionsInternal =
-	Omit<HandleScaleOptions, 'axisPressedMouseMove'>
+	Omit<HandleScaleOptions, 'axisPressedMouseMove' | 'axisDoubleClickReset'>
 	& {
 		/** @public */
 		axisPressedMouseMove: AxisPressedMouseMoveOptions;
+
+		/** @public */
+		axisDoubleClickReset: AxisDoubleClickOptions;
 	};
 
 /**
@@ -136,6 +138,25 @@ export interface AxisPressedMouseMoveOptions {
 
 	/**
 	 * Enable scaling the price axis by holding down the left mouse button and moving the mouse.
+	 *
+	 * @defaultValue `true`
+	 */
+	price: boolean;
+}
+
+/**
+ * Represents options for how the time and price axes react to mouse double click.
+ */
+export interface AxisDoubleClickOptions {
+	/**
+	 * Enable resetting scaling the time axis by double-clicking the left mouse button.
+	 *
+	 * @defaultValue `true`
+	 */
+	time: boolean;
+
+	/**
+	 * Enable reseting scaling the price axis by by double-clicking the left mouse button.
 	 *
 	 * @defaultValue `true`
 	 */
@@ -202,7 +223,7 @@ export const enum TrackingModeExitMode {
  */
 export interface TrackingModeOptions {
 	// eslint-disable-next-line tsdoc/syntax
-	/** @inheritdoc TrackingModeExitMode
+	/** @inheritDoc TrackingModeExitMode
 	 *
 	 * @defaultValue {@link TrackingModeExitMode.OnNextTap}
 	 */
@@ -228,6 +249,24 @@ export interface ChartOptions {
 	height: number;
 
 	/**
+	 * Setting this flag to `true` will make the chart watch the chart container's size and automatically resize the chart to fit its container whenever the size changes.
+	 *
+	 * This feature requires [`ResizeObserver`](https://developer.mozilla.org/en-US/docs/Web/API/ResizeObserver) class to be available in the global scope.
+	 * Note that calling code is responsible for providing a polyfill if required. If the global scope does not have `ResizeObserver`, a warning will appear and the flag will be ignored.
+	 *
+	 * Please pay attention that `autoSize` option and explicit sizes options `width` and `height` don't conflict with one another.
+	 * If you specify `autoSize` flag, then `width` and `height` options will be ignored unless `ResizeObserver` has failed. If it fails then the values will be used as fallback.
+	 *
+	 * The flag `autoSize` could also be set with and unset with `applyOptions` function.
+	 * ```js
+	 * const chart = LightweightCharts.createChart(document.body, {
+	 *     autoSize: true,
+	 * });
+	 * ```
+	 */
+	autoSize: boolean;
+
+	/**
 	 * Watermark options.
 	 *
 	 * A watermark is a background label that includes a brief description of the drawn data. Any text can be added to it.
@@ -241,14 +280,6 @@ export interface ChartOptions {
 	 * Layout options
 	 */
 	layout: LayoutOptions;
-
-	/**
-	 * Price scale options.
-	 *
-	 * @deprecated Use {@link leftPriceScale}, {@link rightPriceScale} or {@link overlayPriceScales} instead.
-	 * @internal
-	 */
-	priceScale: PriceScaleOptions;
 
 	/**
 	 * Left price scale options
@@ -307,14 +338,14 @@ export interface ChartOptions {
 }
 
 export type ChartOptionsInternal =
-	Omit<ChartOptions, 'handleScroll' | 'handleScale' | 'priceScale' | 'layout'>
+	Omit<ChartOptions, 'handleScroll' | 'handleScale' | 'layout'>
 	& {
 		/** @public */
 		handleScroll: HandleScrollOptions;
 		/** @public */
 		handleScale: HandleScaleOptionsInternal;
 		/** @public */
-		layout: LayoutOptionsInternal;
+		layout: LayoutOptions;
 	};
 
 interface GradientColorsCache {
@@ -338,11 +369,10 @@ export class ChartModel implements IDestroyable {
 	private _serieses: Series[] = [];
 
 	private _width: number = 0;
-	private _initialTimeScrollPos: number | null = null;
 	private _hoveredSource: HoveredSource | null = null;
 	private readonly _priceScalesOptionsChanged: Delegate = new Delegate();
-	private _crosshairMoved: Delegate<TimePointIndex | null, Point | null> = new Delegate();
 	private _customPriceLineDragged: Delegate<CustomPriceLine, string> = new Delegate();
+	private _crosshairMoved: Delegate<TimePointIndex | null, Point | null, TouchMouseEventData | null> = new Delegate();
 
 	private _backgroundTopColor: string;
 	private _backgroundBottomColor: string;
@@ -367,11 +397,11 @@ export class ChartModel implements IDestroyable {
 	}
 
 	public fullUpdate(): void {
-		this._invalidate(new InvalidateMask(InvalidationLevel.Full));
+		this._invalidate(InvalidateMask.full());
 	}
 
 	public lightUpdate(): void {
-		this._invalidate(new InvalidateMask(InvalidationLevel.Light));
+		this._invalidate(InvalidateMask.light());
 	}
 
 	public cursorUpdate(): void {
@@ -481,7 +511,7 @@ export class ChartModel implements IDestroyable {
 		return this._crosshair;
 	}
 
-	public crosshairMoved(): ISubscription<TimePointIndex | null, Point | null> {
+	public crosshairMoved(): ISubscription<TimePointIndex | null, Point | null, TouchMouseEventData | null> {
 		return this._crosshairMoved;
 	}
 
@@ -517,7 +547,7 @@ export class ChartModel implements IDestroyable {
 		// if autoscale option is true, it is ok, just recalculate by invalidation mask
 		// if autoscale option is false, autoscale anyway on the first draw
 		// also there is a scenario when autoscale is true in constructor and false later on applyOptions
-		const mask = new InvalidateMask(InvalidationLevel.Full);
+		const mask = InvalidateMask.full();
 		mask.invalidatePane(actualIndex, {
 			level: InvalidationLevel.None,
 			autoScale: true,
@@ -612,34 +642,24 @@ export class ChartModel implements IDestroyable {
 	}
 
 	public startScrollTime(x: Coordinate): void {
-		this._initialTimeScrollPos = x;
 		this._timeScale.startScroll(x);
 	}
 
-	public scrollTimeTo(x: Coordinate): boolean {
-		let res = false;
-		if (this._initialTimeScrollPos !== null && Math.abs(x - this._initialTimeScrollPos) > 20) {
-			this._initialTimeScrollPos = null;
-			res = true;
-		}
-
+	public scrollTimeTo(x: Coordinate): void {
 		this._timeScale.scrollTo(x);
 		this.recalculateAllPanes();
-		return res;
 	}
 
 	public endScrollTime(): void {
 		this._timeScale.endScroll();
 		this.lightUpdate();
-
-		this._initialTimeScrollPos = null;
 	}
 
 	public serieses(): readonly Series[] {
 		return this._serieses;
 	}
 
-	public setAndSaveCurrentPosition(x: Coordinate, y: Coordinate, pane: Pane): void {
+	public setAndSaveCurrentPosition(x: Coordinate, y: Coordinate, event: TouchMouseEventData | null, pane: Pane): void {
 		this._crosshair.saveOriginCoord(x, y);
 		let price = NaN;
 		let index = this._timeScale.coordinateToIndex(x);
@@ -659,14 +679,14 @@ export class ChartModel implements IDestroyable {
 		this._crosshair.setPosition(index, price, pane);
 
 		this.cursorUpdate();
-		this._crosshairMoved.fire(this._crosshair.appliedIndex(), { x, y });
+		this._crosshairMoved.fire(this._crosshair.appliedIndex(), { x, y }, event);
 	}
 
 	public clearCurrentPosition(): void {
 		const crosshair = this.crosshairSource();
 		crosshair.clearPosition();
 		this.cursorUpdate();
-		this._crosshairMoved.fire(null, null);
+		this._crosshairMoved.fire(null, null, null);
 	}
 
 	public updateCrosshair(): void {
@@ -675,7 +695,7 @@ export class ChartModel implements IDestroyable {
 		if (pane !== null) {
 			const x = this._crosshair.originCoordX();
 			const y = this._crosshair.originCoordY();
-			this.setAndSaveCurrentPosition(x, y, pane);
+			this.setAndSaveCurrentPosition(x, y, null, pane);
 		}
 
 		this._crosshair.updateAllViews();
@@ -801,32 +821,44 @@ export class ChartModel implements IDestroyable {
 	}
 
 	public fitContent(): void {
-		const mask = new InvalidateMask(InvalidationLevel.Light);
+		const mask = InvalidateMask.light();
 		mask.setFitContent();
 		this._invalidate(mask);
 	}
 
 	public setTargetLogicalRange(range: LogicalRange): void {
-		const mask = new InvalidateMask(InvalidationLevel.Light);
+		const mask = InvalidateMask.light();
 		mask.applyRange(range);
 		this._invalidate(mask);
 	}
 
 	public resetTimeScale(): void {
-		const mask = new InvalidateMask(InvalidationLevel.Light);
+		const mask = InvalidateMask.light();
 		mask.resetTimeScale();
 		this._invalidate(mask);
 	}
 
 	public setBarSpacing(spacing: number): void {
-		const mask = new InvalidateMask(InvalidationLevel.Light);
+		const mask = InvalidateMask.light();
 		mask.setBarSpacing(spacing);
 		this._invalidate(mask);
 	}
 
 	public setRightOffset(offset: number): void {
-		const mask = new InvalidateMask(InvalidationLevel.Light);
+		const mask = InvalidateMask.light();
 		mask.setRightOffset(offset);
+		this._invalidate(mask);
+	}
+
+	public setTimeScaleAnimation(animation: ITimeScaleAnimation): void {
+		const mask = InvalidateMask.light();
+		mask.setTimeScaleAnimation(animation);
+		this._invalidate(mask);
+	}
+
+	public stopTimeScaleAnimation(): void {
+		const mask = InvalidateMask.light();
+		mask.stopTimeScaleAnimation();
 		this._invalidate(mask);
 	}
 

@@ -58,11 +58,6 @@ export interface LayoutOptions {
 	background: Background;
 
 	/**
-	 * @deprecated Use background instead.
-	 */
-	backgroundColor: string;
-
-	/**
 	 * Color of text on the scales.
 	 *
 	 * @defaultValue `'#191919'`
@@ -79,9 +74,7 @@ export interface LayoutOptions {
 	/**
 	 * Font family of text on the scales.
 	 *
-	 * @defaultValue `'Trebuchet MS', Roboto, Ubuntu, sans-serif`
+	 * @defaultValue `-apple-system, BlinkMacSystemFont, 'Trebuchet MS', Roboto, Ubuntu, sans-serif`
 	 */
 	fontFamily: string;
 }
-
-export type LayoutOptionsInternal = Omit<LayoutOptions, 'backgroundColor'>;

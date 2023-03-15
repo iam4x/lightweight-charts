@@ -9,10 +9,10 @@ const https = require('https');
 const lightCodeTheme = require('prism-react-renderer/themes/github');
 const darkCodeTheme = require('prism-react-renderer/themes/dracula');
 const { default: pluginDocusaurus } = require('docusaurus-plugin-typedoc');
-const { default: logger } = require('@docusaurus/logger');
+const logger = require('@docusaurus/logger');
 
 const versions = require('./versions.json');
-const sizeLimits = require('../.size-limit');
+const sizeLimits = require('../.size-limit.js');
 
 const organizationName = process.env.GITHUB_ORGANIZATION_NAME || 'tradingview';
 const projectName = 'lightweight-charts';
@@ -48,17 +48,39 @@ function httpGetJson(url) {
 	});
 }
 
-function downloadTypingsToFile(typingsFilePath, version) {
+function delay(duration) {
+	return new Promise(resolve => {
+		setTimeout(resolve, duration);
+	});
+}
+
+function downloadFile(urlString, filePath, retriesRemaining = 0, attempt = 1) {
 	return new Promise((resolve, reject) => {
 		let file;
-		const versionTypingsUrl = `https://unpkg.com/lightweight-charts@${version}/dist/typings.d.ts`;
-		const request = https.get(versionTypingsUrl, response => {
-			if (response.statusCode && (response.statusCode < 100 || response.statusCode > 299)) {
-				reject(new Error(`Cannot download typings "${versionTypingsUrl}", error code=${response.statusCode}`));
+
+		const url = new URL(urlString);
+
+		const request = https.get(url, response => {
+			if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location !== undefined) {
+				// handling redirect
+				url.pathname = response.headers.location;
+				downloadFile(url.toString(), filePath, retriesRemaining).then(resolve, reject);
 				return;
 			}
 
-			file = fs.createWriteStream(typingsFilePath);
+			if (response.statusCode && (response.statusCode < 100 || response.statusCode > 299)) {
+				if (retriesRemaining > 0) {
+					logger.info(`Failed to download from ${urlString}, attempting again (${retriesRemaining - 1} retries remaining).`);
+					delay(Math.pow(2, attempt) * 200).then(() => {
+						downloadFile(url.toString(), filePath, retriesRemaining - 1, attempt + 1).then(resolve, reject);
+					});
+					return;
+				}
+				reject(new Error(`Cannot download file "${urlString}", error code=${response.statusCode}`));
+				return;
+			}
+
+			file = fs.createWriteStream(filePath);
 			file.on('finish', () => {
 				file.close(resolve);
 			});
@@ -76,8 +98,20 @@ function downloadTypingsToFile(typingsFilePath, version) {
 	});
 }
 
+function downloadTypingsToFile(typingsFilePath, version) {
+	return downloadFile(
+		`https://unpkg.com/lightweight-charts@${version}/dist/typings.d.ts`,
+		typingsFilePath,
+		2
+	);
+}
+
+function getTypingsCacheFilePath(version) {
+	return path.resolve(cacheDir, `./v${version}.d.ts`);
+}
+
 async function downloadTypingsFromUnpkg(version) {
-	const typingsFilePath = path.resolve(cacheDir, `./v${version}.d.ts`);
+	const typingsFilePath = getTypingsCacheFilePath(version);
 
 	try {
 		await fsp.stat(typingsFilePath);
@@ -92,7 +126,7 @@ async function downloadTypingsFromUnpkg(version) {
 	return typingsFilePath;
 }
 
-/** @type {Partial<import('docusaurus-plugin-typedoc/dist/types').PluginOptions> & import('typedoc/dist/index').TypeDocOptions} */
+/** @type {Partial<import('docusaurus-plugin-typedoc/dist/types').PluginOptions> & import('typedoc').TypeDocOptions} */
 const commonDocusaurusPluginTypedocConfig = {
 	readme: 'none',
 	disableSources: true,
@@ -104,6 +138,14 @@ const commonDocusaurusPluginTypedocConfig = {
 	// which would result in the title of our generated index page being 'undefined'.
 	name: 'lightweight-charts',
 	sort: ['source-order'],
+
+	// let's disable pagination for API Reference pages since it makes almost no sense there
+	frontmatter: {
+		// eslint-disable-next-line camelcase
+		pagination_next: null,
+		// eslint-disable-next-line camelcase
+		pagination_prev: null,
+	},
 };
 
 /** @type {(version: string) => import('@docusaurus/types').PluginModule} */
@@ -113,12 +155,10 @@ function typedocPluginForVersion(version) {
 
 		/** @type {() => Promise<any>} */
 		loadContent: async () => {
-			const typingsFilePath = await downloadTypingsFromUnpkg(version);
-
 			await pluginDocusaurus(context, {
 				...commonDocusaurusPluginTypedocConfig,
 				id: `${version}-api`,
-				entryPoints: [typingsFilePath],
+				entryPoints: [getTypingsCacheFilePath(version)],
 				docsRoot: path.resolve(__dirname, `./versioned_docs/version-${version}`),
 			}).loadContent();
 		},
@@ -141,6 +181,9 @@ async function getConfig() {
 		logger.warn(`Cannot use size from bundlephobia, use size from size-limit instead, error=${e.toString()}`);
 	}
 
+	// pre-download required typings files before run docusaurus
+	await Promise.all(versions.map(downloadTypingsFromUnpkg));
+
 	/** @type {import('@docusaurus/types').Config} */
 	const config = {
 		title: 'Lightweight Charts',
@@ -153,6 +196,52 @@ async function getConfig() {
 		organizationName,
 		projectName: 'lightweight-charts',
 		trailingSlash: false,
+
+		headTags: [
+			{
+				tagName: 'link',
+				attributes: {
+					rel: 'apple-touch-icon',
+					sizes: '180x180',
+					href: `/${projectName}/img/favicon/apple-touch-icon.png`,
+				},
+			},
+			{
+				tagName: 'link',
+				attributes: {
+					rel: 'icon',
+					type: 'image/png',
+					sizes: '32x32',
+					href: `/${projectName}/img/favicon/32x32.png`,
+				},
+			},
+			{
+				tagName: 'link',
+				attributes: {
+					rel: 'icon',
+					type: 'image/png',
+					sizes: '16x16',
+					href: `/${projectName}/img/favicon/16x16.png`,
+				},
+			},
+			{
+				tagName: 'link',
+				attributes: {
+					rel: 'mask-icon',
+					color: '#2962ff',
+					href: `/${projectName}/img/favicon/safari-pinned-tab.svg`,
+				},
+			},
+			{
+				tagName: 'link',
+				attributes: {
+					rel: 'icon',
+					type: 'image/svg',
+					sizes: '32x32',
+					href: `/${projectName}/img/favicon/favicon.svg`,
+				},
+			},
+		],
 
 		presets: [
 			[
@@ -181,6 +270,7 @@ async function getConfig() {
 					title: 'Lightweight Charts',
 					logo: {
 						src: 'this value is not used because we swizzled the Logo component - see src/theme/Logo',
+						alt: 'Lightweight Charts home button',
 					},
 					items: [
 						{
@@ -270,11 +360,41 @@ async function getConfig() {
 					theme: lightCodeTheme,
 					darkTheme: darkCodeTheme,
 					additionalLanguages: ['ruby', 'swift', 'kotlin', 'groovy'],
+					magicComments: [
+						{
+							className: 'theme-code-block-highlighted-line',
+							line: 'highlight-next-line',
+							block: { start: 'highlight-start', end: 'highlight-end' },
+						},
+						{
+							// Lightly fades the code lines (useful for boilerplate sections of code)
+							className: 'code-block-fade-line',
+							block: {
+								start: 'highlight-fade-start',
+								end: 'highlight-fade-end',
+							},
+							line: 'highlight-fade',
+						},
+						{
+							// Hides code lines but can be reveal using toggle and css
+							className: 'code-block-hide-line',
+							block: { start: 'hide-start', end: 'hide-end' },
+							line: 'hide-line',
+						},
+						{
+							// Hides code lines and can't be reveal using toggle and css.
+							// Will still be included in copied code.
+							// Useful for type comments and header notices.
+							className: 'code-block-remove-line',
+							block: { start: 'remove-start', end: 'remove-end' },
+							line: 'remove-line',
+						},
+					],
 				},
 				algolia: {
 					appId: '7Q5A441YPA',
 					// Public API key: it is safe to commit it
-					apiKey: 'b6417716804e66012544fd5904e208c8',
+					apiKey: 'c8a8aaeb7ef3fbcce40bada2196e2bcb',
 					indexName: 'lightweight-charts',
 					contextualSearch: true,
 				},
@@ -293,8 +413,7 @@ async function getConfig() {
 			],
 			[
 				'docusaurus-plugin-typedoc',
-				// @ts-ignore
-				/** @type {Partial<import('docusaurus-plugin-typedoc/dist/types').PluginOptions> & import('typedoc/dist/index').TypeDocOptions} */
+				/** @type {Partial<import('docusaurus-plugin-typedoc/dist/types').PluginOptions> & import('typedoc').TypeDocOptions} */
 				({
 					...commonDocusaurusPluginTypedocConfig,
 					id: 'current-api',
@@ -304,6 +423,7 @@ async function getConfig() {
 				}),
 			],
 			...versions.map(typedocPluginForVersion),
+			'./plugins/enhanced-codeblock',
 		],
 	};
 

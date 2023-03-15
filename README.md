@@ -16,7 +16,7 @@
 
 <!-- markdownlint-enable no-inline-html -->
 
-[Demos][demo-url] | [Documentation](https://tradingview.github.io/lightweight-charts/) | [Discord community](https://discord.gg/UC7cGkvn4U)
+[Demos][demo-url] | [Documentation](https://tradingview.github.io/lightweight-charts/) | [Discord community](https://discord.gg/UC7cGkvn4U) | [Reddit](https://www.reddit.com/r/TradingView/)
 
 TradingView Lightweight Charts are one of the smallest and fastest financial HTML5 charts.
 
@@ -76,6 +76,17 @@ lineSeries.setData([
     { time: '2019-04-20', value: 74.43 },
 ]);
 ```
+
+### Build Variants
+
+|Dependencies included|Mode|ES module|CommonJS ⚠️|IIFE (`window.LightweightCharts`)|
+|-|-|-|-|-|
+|No|PROD|`lightweight-charts.production.mjs`|`lightweight-charts.production.cjs`|N/A|
+|No|DEV|`lightweight-charts.development.mjs`|`lightweight-charts.development.cjs`|N/A|
+|Yes (standalone)|PROD|`lightweight-charts.standalone.production.mjs`|-|`lightweight-charts.standalone.production.js`|
+|Yes (standalone)|DEV|`lightweight-charts.standalone.development.mjs`|-|`lightweight-charts.standalone.development.js`|
+
+⚠️ **Deprecation note:** CommonJS support will be removed from the library at the start of 2024.
 
 ## Development
 

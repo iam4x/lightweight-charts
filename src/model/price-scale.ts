@@ -10,7 +10,7 @@ import { DeepPartial, merge } from '../helpers/strict-type-checks';
 import { BarCoordinates, BarPrice, BarPrices } from './bar';
 import { Coordinate } from './coordinate';
 import { FirstValue, IPriceDataSource } from './iprice-data-source';
-import { LayoutOptionsInternal } from './layout-options';
+import { LayoutOptions } from './layout-options';
 import { LocalizationOptions } from './localization-options';
 import { PriceRangeImpl } from './price-range-impl';
 import {
@@ -85,11 +85,6 @@ export interface PriceScaleMargins {
 	bottom: number;
 }
 
-/**
- * Represents the position of a price axis relative to the chart.
- */
-export type PriceAxisPosition = 'left' | 'right' | 'none';
-
 /** Structure that describes price scale options */
 export interface PriceScaleOptions {
 	/**
@@ -123,14 +118,6 @@ export interface PriceScaleOptions {
 	alignLabels: boolean;
 
 	/**
-	 * Price scale's position on the chart.
-	 *
-	 * @deprecated Use options for different price scales instead
-	 * @internal
-	 */
-	position?: PriceAxisPosition;
-
-	/**
 	 * Price scale margins.
 	 *
 	 * @defaultValue `{ bottom: 0.1, top: 0.2 }`
@@ -161,6 +148,14 @@ export interface PriceScaleOptions {
 	borderColor: string;
 
 	/**
+	 * Price scale text color.
+	 * If not provided {@link LayoutOptions.textColor} is used.
+	 *
+	 * @defaultValue `undefined`
+	 */
+	textColor?: string;
+
+	/**
 	 * Show top and bottom corner labels only if entire text is visible.
 	 *
 	 * @defaultValue `false`
@@ -177,9 +172,9 @@ export interface PriceScaleOptions {
 	/**
 	 * Draw small horizontal line on price axis labels.
 	 *
-	 * @defaultValue `true`
+	 * @defaultValue `false`
 	 */
-	drawTicks: boolean;
+	ticksVisible: boolean;
 }
 
 interface RangeCache {
@@ -201,7 +196,7 @@ interface MarksCache {
 export class PriceScale {
 	private readonly _id: string;
 
-	private readonly _layoutOptions: LayoutOptionsInternal;
+	private readonly _layoutOptions: LayoutOptions;
 	private readonly _localizationOptions: LocalizationOptions;
 	private readonly _options: PriceScaleOptions;
 
@@ -231,7 +226,7 @@ export class PriceScale {
 
 	private _logFormula: LogFormula = logFormulaForPriceRange(null);
 
-	public constructor(id: string, options: PriceScaleOptions, layoutOptions: LayoutOptionsInternal, localizationOptions: LocalizationOptions) {
+	public constructor(id: string, options: PriceScaleOptions, layoutOptions: LayoutOptions, localizationOptions: LocalizationOptions) {
 		this._id = id;
 		this._options = options;
 		this._layoutOptions = layoutOptions;

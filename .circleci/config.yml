@@ -40,17 +40,13 @@ aliases:
 
 
 executors:
-  node12-executor:
+  node16-executor:
     docker:
-      - image: circleci/node:12
+      - image: cimg/node:16.16
 
-  node12-browsers-executor:
+  node16-browsers-executor:
     docker:
-      - image: circleci/node:12-browsers
-
-  node14-executor:
-    docker:
-      - image: cimg/node:14.18
+      - image: cimg/node:16.16-browsers
 
 commands:
   checkout-with-deps:
@@ -78,7 +74,10 @@ commands:
             echo 'export TESTS_REPORT_FILE="test-results/graphics/results.xml"' >> $BASH_ENV
             echo 'export DEVICE_PIXEL_RATIO=<< parameters.devicePixelRatio >>' >> $BASH_ENV
             echo 'export PRODUCTION_BUILD=<< parameters.productionBuild >>' >> $BASH_ENV
-      - run: scripts/run-graphics-tests.sh
+      - run:
+          command: scripts/run-graphics-tests.sh
+          no_output_timeout: 20m
+
       - store_test_results:
           path: test-results/
       - store_artifacts:
@@ -88,27 +87,27 @@ commands:
 
 jobs:
   install-deps:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
       - run: npm install
       - save_cache: *save-node-modules-cache
 
   install-deps-website:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
       - run: cd website && npm install
       - save_cache: *save-node-modules-cache-website
 
   build:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
+      - run: npm run build:prod
       # make sure that the project is compiled successfully with composite projects
       # so we don't have cyclic deps between projects and wrong imports
       - run: npm run tsc-verify
-      - run: npm run build:prod
       - persist_to_workspace:
           root: ./
           paths:
@@ -116,25 +115,27 @@ jobs:
             - dist
 
   no-crlf:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout
       - run: scripts/no-crlf.sh
 
   trailing-lf:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout
       - run: scripts/trailing-newlines.sh
 
   lint-eslint:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
+      - attach_workspace:
+          at: ./
       - run: npm run lint:eslint
 
   lint-dts:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
       - attach_workspace:
@@ -143,13 +144,34 @@ jobs:
       - run: npm run check-dts-docs
 
   lint-markdown:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
       - run: npm run lint:md
 
+  usable-in-nodejs:
+    executor: node16-executor
+    steps:
+      - checkout-with-deps
+      - attach_workspace:
+          at: ./
+      - run: npm run prepare-package-json-for-release
+      - run:
+          name: "Installing lightweight-charts package into node_modules"
+          # this is hacky way to do something like `npm link lightweight-charts`
+          # but we cannot use `npm link` in CI
+          command: |
+            cd node_modules
+            ln -s ../ lightweight-charts
+      - run:
+          name: "Check CJS could be imported in NodeJS"
+          command: node -e "require('lightweight-charts')" --input-type=commonjs
+      - run:
+          name: "Check ESM could be imported in NodeJS"
+          command: node -e "import 'lightweight-charts'" --input-type=module
+
   unittests:
-    executor: node12-executor
+    executor: node16-executor
     environment:
       TESTS_REPORT_FILE: "test-results/unittests/results.xml"
     steps:
@@ -159,7 +181,7 @@ jobs:
           path: test-results/
 
   dts-changes:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
       - run: scripts/check-dts-changes.sh ./dts-changes $(git merge-base origin/master HEAD) $(git rev-parse HEAD)
@@ -168,25 +190,31 @@ jobs:
           when: on_fail
 
   graphics-tests-dpr1_0:
-    executor: node12-browsers-executor
+    executor: node16-browsers-executor
     steps:
       - run-graphics-tests:
           devicePixelRatio: "1.0"
 
+  graphics-tests-dpr1_25:
+    executor: node16-browsers-executor
+    steps:
+      - run-graphics-tests:
+          devicePixelRatio: "1.25"
+
   graphics-tests-dpr1_5:
-    executor: node12-browsers-executor
+    executor: node16-browsers-executor
     steps:
       - run-graphics-tests:
           devicePixelRatio: "1.5"
 
   graphics-tests-dpr2_0:
-    executor: node12-browsers-executor
+    executor: node16-browsers-executor
     steps:
       - run-graphics-tests:
           devicePixelRatio: "2.0"
 
   graphics-tests-dpr2_0-prod:
-    executor: node12-browsers-executor
+    executor: node16-browsers-executor
     steps:
       - run-graphics-tests:
           devicePixelRatio: "2.0"
@@ -194,20 +222,27 @@ jobs:
 
 
   memleaks-tests:
-    executor: node12-browsers-executor
+    executor: node16-browsers-executor
     environment:
       NO_SANDBOX: "true"
       TESTS_REPORT_FILE: "test-results/memleaks/results.xml"
+      RUNNING_ON_CI: "true"
     steps:
       - checkout-with-deps
       - attach_workspace:
           at: ./
+      # install the required libraries for chrome version used by memlab
+      - run: sudo apt-get update
+      - run: sudo apt-get install ca-certificates fonts-liberation libasound2 libatk-bridge2.0-0 libatk1.0-0 libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgbm1 libgcc1 libglib2.0-0 libgtk-3-0 libnspr4 libnss3 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 lsb-release wget xdg-utils
+      - run: sleep 5
       - run: scripts/run-memleaks-tests.sh
       - store_test_results:
           path: test-results/
+      - store_artifacts:
+          path: tests/e2e/memleaks/.logs/
 
   coverage:
-    executor: node12-browsers-executor
+    executor: node16-browsers-executor
     environment:
       NO_SANDBOX: "true"
       TESTS_REPORT_FILE: "test-results/coverage/results.xml"
@@ -219,8 +254,21 @@ jobs:
       - store_test_results:
           path: test-results/
 
+  interactions:
+    executor: node16-browsers-executor
+    environment:
+      NO_SANDBOX: "true"
+      TESTS_REPORT_FILE: "test-results/interactions/results.xml"
+    steps:
+      - checkout-with-deps
+      - attach_workspace:
+          at: ./
+      - run: scripts/run-interactions-tests.sh
+      - store_test_results:
+          path: test-results/
+
   size-limit:
-    executor: node12-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
       - attach_workspace:
@@ -231,11 +279,10 @@ jobs:
       - run: npm run size-limit
 
   build-docusaurus-website:
-    executor: node14-executor
+    executor: node16-executor
     steps:
       - checkout-with-deps
-      - run: npm run tsc
-      - run: npm run bundle-dts
+      - run: npm run build:prod
       - run:
           name: "Install dependencies and build website"
           command: |
@@ -252,7 +299,7 @@ jobs:
             - website
 
   deploy-docusaurus-website:
-    executor: node14-executor
+    executor: node16-executor
     environment:
       USE_SSH: "true"
       # We should be able to remove GIT_USER when we have upgraded to a Docusaurus version > 2.0.0-beta.9
@@ -294,16 +341,17 @@ workflows:
           filters: *default-filters
           requires:
             - install-deps
-      - lint-eslint:
-          filters: *default-filters
-          requires:
-            - install-deps
+            - install-deps-website
       - lint-markdown:
           filters: *default-filters
           requires:
             - install-deps
 
       - size-limit:
+          filters: *default-filters
+          requires:
+            - build
+      - usable-in-nodejs:
           filters: *default-filters
           requires:
             - build
@@ -316,6 +364,10 @@ workflows:
           requires:
             - build
       - graphics-tests-dpr1_0:
+          filters: *merge-based-filters
+          requires:
+            - build
+      - graphics-tests-dpr1_25:
           filters: *merge-based-filters
           requires:
             - build
@@ -339,17 +391,18 @@ workflows:
           filters: *default-filters
           requires:
             - build
+      - interactions:
+          filters: *default-filters
+          requires:
+            - build
       - lint-dts:
           filters: *default-filters
           requires:
             - build
-
-  website:
-    jobs:
-      - install-deps:
+      - lint-eslint:
           filters: *default-filters
-      - install-deps-website:
-          filters: *default-filters
+          requires:
+            - build
       - build-docusaurus-website:
           filters: *default-filters
           requires:

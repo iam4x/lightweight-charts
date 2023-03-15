@@ -43,13 +43,20 @@ function generateDataHist() {
 	return res;
 }
 
+// Ignore the mouse movement check because we are covering the chart.
+window.ignoreMouseMove = true;
+window.checkChartScreenshot = true;
+
 function runTestCase(container) {
-	const chart = LightweightCharts.createChart(container, {
+	const chart = window.chart = LightweightCharts.createChart(container, {
 		timeScale: {
 			barSpacing: 20,
 		},
 		layout: {
-			backgroundColor: '#fff',
+			background: {
+				type: LightweightCharts.ColorType.Solid,
+				color: '#fff',
+			},
 		},
 		leftPriceScale: {
 			visible: true,
@@ -89,14 +96,10 @@ function runTestCase(container) {
 
 	histSeries.setData(generateDataHist());
 
-	// create canvas to draw screenshot
+	// free up some space to draw screenshot
 	chart.resize(600, 240, true);
 
-	const screenshot = chart.takeScreenshot();
-	screenshot.style.position = 'absolute';
-	screenshot.style.top = '260px';
-
+	// change background color
 	const parent = container.parentNode;
 	parent.style.backgroundColor = 'yellow';
-	parent.appendChild(screenshot);
 }

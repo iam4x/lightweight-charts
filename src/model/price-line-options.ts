@@ -5,6 +5,10 @@ import { LineStyle, LineWidth } from '../renderers/draw-line';
  */
 export interface PriceLineOptions {
 	/**
+	 * The optional ID of this price line.
+	 */
+	id?: string;
+	/**
 	 * Price line's value.
 	 *
 	 * @defaultValue `0`
@@ -53,3 +57,10 @@ export interface PriceLineOptions {
 	textB?: string;
 	textC?: string;
 }
+
+/**
+ * Price line options for the {@link ISeriesApi.createPriceLine} method.
+ *
+ * `price` is required, while the rest of the options are optional.
+ */
+export type CreatePriceLineOptions = Partial<PriceLineOptions> & Pick<PriceLineOptions, 'price'>;
