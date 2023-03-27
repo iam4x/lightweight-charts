@@ -50,14 +50,14 @@ export class HorizontalLineRenderer implements IPaneRenderer {
 		if (this._data.textA || this._data.textB || this._data.textC) {
 			setLineStyle(ctx, LineStyle.Solid);
 
-			const rectHeight = 20;
+			const rectHeight = 20 * pixelRatio;
 			const rectX = 150;
-			const rectY = y - 12.5;
+			const rectY = (y - 12.5);
 
 			const textA = this._data.textA || '';
 
 			const { width: textWidth } = ctx.measureText(textA);
-			const rectW = textWidth + 20;
+			const rectW = (textWidth + 20) * pixelRatio;
 
 			ctx.beginPath();
 			ctx.strokeStyle = this._data.color;
@@ -67,7 +67,7 @@ export class HorizontalLineRenderer implements IPaneRenderer {
 			ctx.fill();
 
 			ctx.beginPath();
-			ctx.font = 'bold 9px Arial';
+			ctx.font = `bold ${9 * pixelRatio}px Arial`;
 			ctx.textAlign = 'center';
 			ctx.textBaseline = 'middle';
 			ctx.fillStyle = this._data.color;
@@ -77,7 +77,7 @@ export class HorizontalLineRenderer implements IPaneRenderer {
 
 			const rect2X = rectX + rectW;
 			const { width: textWidth2 } = ctx.measureText(textB);
-			const rect2W = textWidth2 + 20;
+			const rect2W = (textWidth2 + 20) * pixelRatio;
 
 			ctx.beginPath();
 			ctx.fillStyle = this._data.color;
@@ -94,7 +94,7 @@ export class HorizontalLineRenderer implements IPaneRenderer {
 
 				const rect3X = rect2X + rect2W;
 				const { width: textWidth3 } = ctx.measureText(textC);
-				const rect3W = textWidth3 + 20;
+				const rect3W = (textWidth3 + 20) * pixelRatio;
 
 				ctx.beginPath();
 				ctx.fillStyle = '#FFF';
